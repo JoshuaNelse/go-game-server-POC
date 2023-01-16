@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"game-poc/server/config"
 	"game-poc/server/monitoring"
+	"game-poc/server/network/client"
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
@@ -42,35 +44,7 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func serverListenWrite(c *websocket.Conn, ch chan *[]byte) {
-	defer c.Close()
-
-	for {
-		message := <-ch
-		err := c.WriteMessage(1, *message)
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		log.Printf("game sent: %s", message)
-	}
-}
-
-func serverListenRead(c *websocket.Conn) {
-	defer c.Close()
-
-	for {
-		_, message, err := c.ReadMessage()
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		log.Printf("game server recv: %s", message)
-
-		// echo for now, but this should send inputs somewhere to be calculated and forwarded to all clients
-		gameChan <- &message
-	}
-}
+var clients []*client.Client
 
 func game(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
@@ -78,9 +52,16 @@ func game(w http.ResponseWriter, r *http.Request) {
 		log.Print("Error upgrading http request to websocket:", err)
 		return
 	}
+	// need to eventually find a way to lock or prevent collision here for client id
+	clientId := uuid.New()
+	gameClient := client.NewClient(clientId, c, gameChan)
+	defer func() {
+		defer c.Close()
+		// TODO clean up client from clients list
+	}()
+	clients = append(clients, gameClient)
 
-	go serverListenRead(c)
-	serverListenWrite(c, gameChan)
+	gameClient.Listen()
 }
 
 func healthCheckPage(w http.ResponseWriter, r *http.Request) {
