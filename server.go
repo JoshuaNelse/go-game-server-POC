@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"game-poc/server/config"
 	"game-poc/server/monitoring"
-	"game-poc/server/network/client"
+	"game-poc/server/network"
 	"log"
 	"net/http"
 
@@ -44,7 +44,7 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-var clients []*client.Client
+var clients []*network.Client
 
 func game(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
@@ -54,7 +54,7 @@ func game(w http.ResponseWriter, r *http.Request) {
 	}
 	// need to eventually find a way to lock or prevent collision here for client id
 	clientId := uuid.New()
-	gameClient := client.NewClient(clientId, c, gameChan)
+	gameClient := network.NewClient(clientId, c, gameChan)
 	defer func() {
 		defer c.Close()
 		// TODO clean up client from clients list
@@ -89,8 +89,9 @@ func main() {
 		MetricsEnabled: *metricsEnabled,
 	})
 	gameChan = make(chan *[]byte)
-	http.HandleFunc("/echo", echo)
 	http.HandleFunc("/game", game)
+
+	http.HandleFunc("/echo", echo)
 	http.HandleFunc("/health", healthCheckPage)
 	http.HandleFunc("/stats", serverStatsPage)
 	log.Fatal(http.ListenAndServe(*addr, nil))

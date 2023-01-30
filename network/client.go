@@ -1,4 +1,4 @@
-package client
+package network
 
 import (
 	"fmt"
@@ -23,14 +23,14 @@ func NewClient(id uuid.UUID, wsConn *websocket.Conn, gameChannel chan *[]byte) *
 }
 
 func (c *Client) Listen() {
-	go c.serverListenWrite(c.WSConn, c.GameChan)
-	c.serverListenRead(c.WSConn)
+	go c.serverListenWrite()
+	c.serverListenRead()
 }
 
-func (c *Client) serverListenWrite(conn *websocket.Conn, ch chan *[]byte) {
+func (c *Client) serverListenWrite() {
 	for {
-		message := []byte(fmt.Sprintf("clientId: %v ", c.Id) + string(*<-ch))
-		err := conn.WriteMessage(1, message)
+		message := []byte(fmt.Sprintf("clientId: %v ", c.Id) + string(*<-c.GameChan))
+		err := c.WSConn.WriteMessage(1, message)
 		if err != nil {
 			log.Println("read:", err)
 			break
@@ -39,17 +39,17 @@ func (c *Client) serverListenWrite(conn *websocket.Conn, ch chan *[]byte) {
 	}
 }
 
-func (c *Client) serverListenRead(conn *websocket.Conn) {
+func (c *Client) serverListenRead() {
 
 	for {
-		_, message, err := conn.ReadMessage()
+		_, message, err := c.WSConn.ReadMessage()
 		if err != nil {
-			log.Println("read:", err)
+			log.Println("read err:", err)
 			break
 		}
 		log.Printf("game server recv: %s", message)
 
-		// echo for now, but this should send inputs somewhere to be calculated and forwarded to all clients
+		// echo for now, but this should send inputs somewhere to be calculated and result forwarded to all clients
 		c.GameChan <- &message
 	}
 }
